@@ -1,0 +1,28 @@
+#!/bin/bash
+module load gcc/12.2.0 stack/2024-06 r/4.3.2 udunits/2.2.28 geos/3.9.1 proj/9.2.1 openmpi/4.1.6 hdf5/1.14.3 gdal/3.4.3 python/3.11.6
+module load eth_proxy
+# load virtual environment
+source $HOME/venvs/gchm/bin/activate
+year=$1
+tabledir='/cluster/scratch/hseybold/google-earth-engine/split_2'
+
+echo submitting dummy job
+id=$(sbatch --parsable --time=00:05:00 --wrap="echo DUMMY" -JDUMMY)
+echo submitting job chain
+hdf_outdir="/nfs/ites-eledata.ethz.ch/mnt/eledata/euler/af_600/width10_${year}"
+
+for table in ${tabledir}/*.csv
+do
+    # if the h5 file already exists, skip
+    T=`echo ${table%.*}| awk -F/ '{print $NF}'`
+    echo $T
+    if [ -f ${hdf_outdir}/${T}_${year}.h5 ]; then
+        echo "File exists, skipping"
+        continue
+    fi
+    echo "working on ${hdf_outdir}/${T}_${year}.h5"
+    id=$(sbatch --time=24:00:00 --parsable --tmp=50G --mem-per-cpu=15G -n 2 --ntasks-per-node=2 --dependency=afterany:${id} --wrap="python gee_download_shuo_v2.py $table $year" -J${T}-$year)
+done 
+
+
+
